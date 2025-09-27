@@ -73,14 +73,73 @@
         return;
       }
 
+      // Only set src for the first 3 images, others use data-src
       container.innerHTML = images.map((src, idx) => `
         <div class="item ${idx === 0 ? 'active' : ''}">
-          <img src="${src}" alt="Slide ${idx+1}">
+          <img ${idx < 3 ? `src=\"${src}\"` : `data-src=\"${src}\"`} alt="Slide ${idx+1}" data-index="${idx}">
         </div>
       `).join("");
 
+      // Helper to load an image by index
+      function loadImage(idx) {
+        const img = container.querySelector(`img[data-index='${idx}']`);
+        if (img && img.hasAttribute('data-src') && !img.src) {
+          img.src = img.getAttribute('data-src');
+          img.removeAttribute('data-src');
+        }
+      }
+
+      // Helper to unload an image by index
+      function unloadImage(idx) {
+        const img = container.querySelector(`img[data-index='${idx}']`);
+        if (img && img.src && !img.hasAttribute('data-src')) {
+          img.setAttribute('data-src', img.src);
+          img.removeAttribute('src');
+        }
+      }
+
+      // Maintain only 3 loaded images: current, next, and next-next
+      function updateLoadedImages(currentIdx) {
+        for (let i = 0; i < images.length; i++) {
+          if (i === currentIdx || i === (currentIdx + 1) % images.length || i === (currentIdx + 2) % images.length) {
+            loadImage(i);
+          } else {
+            unloadImage(i);
+          }
+        }
+      }
+
+      // Initial load
+      let currentIdx = 0;
+      updateLoadedImages(currentIdx);
+
       // Jalankan carousel
       $('#carouselFade').carousel({ interval: 5000 });
+
+      // Pause carousel if next image is not loaded
+      $('#carouselFade').on('slide.bs.carousel', function (e) {
+        const next = e.relatedTarget;
+        const nextImg = next.querySelector('img');
+        const nextIdx = parseInt(nextImg.getAttribute('data-index'));
+
+        // If not loaded, pause and wait for load
+        if (!nextImg.complete || !nextImg.naturalWidth) {
+          $('#carouselFade').carousel('pause');
+          // Try to load if not loaded
+          if (nextImg.hasAttribute('data-src')) {
+            nextImg.src = nextImg.getAttribute('data-src');
+            nextImg.removeAttribute('data-src');
+          }
+          nextImg.addEventListener('load', function handler() {
+            nextImg.removeEventListener('load', handler);
+            $('#carouselFade').carousel('cycle');
+          });
+        }
+
+        // Update loaded images
+        updateLoadedImages(nextIdx);
+        currentIdx = nextIdx;
+      });
     })
     .catch(err => {
       console.error("Gagal load gambar:", err);
