@@ -57,8 +57,8 @@
     .then(res => res.json())
     .then(files => {
       const images = files
-        .filter(file => file.type === "file")
-        .map(file => file.download_url);
+        .filter(file => file.type === "file") // hanya file
+        .map(file => file.download_url);      // ambil URL langsung
 
       const container = document.getElementById("carousel-slides");
 
@@ -73,25 +73,14 @@
         return;
       }
 
-      // Only set src for the first 3 images, others use data-src
       container.innerHTML = images.map((src, idx) => `
         <div class="item ${idx === 0 ? 'active' : ''}">
-          <img ${idx < 3 ? `src=\"${src}\"` : `data-src=\"${src}\"`} alt="Slide ${idx+1}">
+          <img src="${src}" alt="Slide ${idx+1}">
         </div>
       `).join("");
 
       // Jalankan carousel
       $('#carouselFade').carousel({ interval: 5000 });
-
-      // Lazy load next image before it is shown
-      $('#carouselFade').on('slide.bs.carousel', function (e) {
-        const next = e.relatedTarget;
-        const img = next.querySelector('img[data-src]');
-        if (img && !img.src) {
-          img.src = img.getAttribute('data-src');
-          img.removeAttribute('data-src');
-        }
-      });
     })
     .catch(err => {
       console.error("Gagal load gambar:", err);
