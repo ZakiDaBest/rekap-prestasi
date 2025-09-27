@@ -116,29 +116,34 @@
       // Jalankan carousel
       $('#carouselFade').carousel({ interval: 5000 });
 
-      // Pause carousel if next image is not loaded
+      // Improved: Only pause if the next image is truly not loaded, and avoid race conditions
       $('#carouselFade').on('slide.bs.carousel', function (e) {
         const next = e.relatedTarget;
         const nextImg = next.querySelector('img');
         const nextIdx = parseInt(nextImg.getAttribute('data-index'));
 
-        // If not loaded, pause and wait for load
-        if (!nextImg.complete || !nextImg.naturalWidth) {
-          $('#carouselFade').carousel('pause');
-          // Try to load if not loaded
-          if (nextImg.hasAttribute('data-src')) {
-            nextImg.src = nextImg.getAttribute('data-src');
-            nextImg.removeAttribute('data-src');
-          }
-          nextImg.addEventListener('load', function handler() {
-            nextImg.removeEventListener('load', handler);
-            $('#carouselFade').carousel('cycle');
-          });
-        }
-
-        // Update loaded images
+        // Update loaded images first
         updateLoadedImages(nextIdx);
         currentIdx = nextIdx;
+
+        // If the image is already loaded, do nothing
+        if (nextImg.complete && nextImg.naturalWidth > 0) {
+          return;
+        }
+
+        // If not loaded, pause and wait for load
+        $('#carouselFade').carousel('pause');
+        if (nextImg.hasAttribute('data-src')) {
+          nextImg.src = nextImg.getAttribute('data-src');
+          nextImg.removeAttribute('data-src');
+        }
+        nextImg.addEventListener('load', function handler() {
+          nextImg.removeEventListener('load', handler);
+          // Double check image is loaded before resuming
+          if (nextImg.complete && nextImg.naturalWidth > 0) {
+            $('#carouselFade').carousel('cycle');
+          }
+        });
       });
     })
     .catch(err => {
