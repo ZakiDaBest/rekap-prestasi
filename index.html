@@ -59,8 +59,19 @@
       const images = files
         .filter(file => file.type === "file") // hanya file
         .map(file => file.download_url);      // ambil URL langsung
+  $(document).ready(function() {
+    const PRELOAD_AHEAD = 3; // How many images to preload in advance
+    let images = [];
+    const loaded = new Set();
+    const $carousel = $('#carouselFade');
 
       const container = document.getElementById("carousel-slides");
+    function preloadImage(index) {
+      return new Promise((resolve, reject) => {
+        if (index < 0 || index >= images.length || loaded.has(index)) {
+          resolve(); // Already loaded or out of bounds
+          return;
+        }
 
       if (images.length === 0) {
         container.innerHTML = `
@@ -72,12 +83,28 @@
           </div>`;
         return;
       }
+        const imgElement = $(`#carousel-slides .item[data-index=${index}] img`);
+        const src = imgElement.data('src');
+        if (!src) {
+          resolve(); // No src to load
+          return;
+        }
 
       container.innerHTML = images.map((src, idx) => `
         <div class="item ${idx === 0 ? 'active' : ''}">
           <img src="${src}" alt="Slide ${idx+1}">
         </div>
       `).join("");
+        const img = new Image();
+        img.onload = () => {
+          imgElement.attr('src', src);
+          loaded.add(index);
+          resolve();
+        };
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
 
       // Jalankan carousel
       $('#carouselFade').carousel({ interval: 5000 });
@@ -85,6 +112,54 @@
     .catch(err => {
       console.error("Gagal load gambar:", err);
     });
+    // Ambil daftar file dari GitHub API
+    fetch("https://api.github.com/repos/pakfab/rekap-prestasi/contents/img")
+      .then(res => res.json())
+      .then(files => {
+        images = files
+          .filter(file => file.type === "file")
+          .map(file => file.download_url);
+
+        const container = $("#carousel-slides");
+
+        if (images.length === 0) {
+          container.html(`<div class="item active" style="background:rgba(0,0,0,0.6);color:#fff;text-align:center;"><div class="carousel-caption"><h3>Tidak ada gambar</h3><p>Tambahkan file ke folder /img/ di repo</p></div></div>`);
+          return;
+        }
+
+        container.html(images.map((src, idx) => `
+          <div class="item ${idx === 0 ? 'active' : ''}" data-index="${idx}">
+            <img ${idx === 0 ? `src="${src}"` : `data-src="${src}"`} alt="Slide ${idx+1}">
+          </div>
+        `).join(""));
+
+        if (images.length > 0) {
+          loaded.add(0); // Mark first image as loaded
+          // Preload next images
+          for (let i = 1; i <= PRELOAD_AHEAD && i < images.length; i++) {
+            preloadImage(i);
+          }
+        }
+
+        $carousel.on('slide.bs.carousel', function (e) {
+          const nextIndex = e.relatedTarget.getAttribute('data-index');
+          if (!loaded.has(parseInt(nextIndex))) {
+            $carousel.carousel('pause');
+            preloadImage(nextIndex).then(() => $carousel.carousel('cycle'));
+          }
+        }).on('slid.bs.carousel', function (e) {
+          const currentIndex = e.relatedTarget.getAttribute('data-index');
+          const imageToPreload = parseInt(currentIndex) + PRELOAD_AHEAD;
+          preloadImage(imageToPreload);
+        });
+
+        $carousel.carousel({ interval: 5000 });
+      })
+      .catch(err => {
+        console.error("Gagal load gambar:", err);
+        $("#carousel-slides").html(`<div class="item active" style="background:rgba(0,0,0,0.6);color:#fff;text-align:center;"><div class="carousel-caption"><h3>Gagal memuat gambar</h3><p>Silakan coba muat ulang halaman.</p></div></div>`);
+      });
+  });
 </script>
 
 </body>
